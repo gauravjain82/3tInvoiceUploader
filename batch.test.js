@@ -134,3 +134,77 @@ test('archiving avoids collisions and rejects paths outside the archive', t => {
     assert.equal(path.basename(destination), 'a--collision-1.pdf');
     assert.equal(fs.readFileSync(path.join(options.uploadedDir, 'Manesar', 'a.pdf'), 'utf8'), 'Existing invoice');
 });
+
+test('transient preview failures retry from a pending PDF and record/archive only the final success', async t => {
+    const options = fixture(t);
+    let attempts = 0;
+    const summary = await main({ ...options, retryDelayMs: 0, processInvoice: async (invoice, company, source, run) => {
+        attempts++;
+        assert.ok(fs.existsSync(source));
+        assert.equal(fs.existsSync(options.failedDir), false);
+        run.stage = 'CONFIRM_PREVIEW';
+        if (attempts < 3) throw new Error('Timed out waiting for preview');
+        return saved();
+    } });
+    assert.equal(attempts, 3);
+    assert.deepEqual(summary.counts, { SUCCESS: 1 });
+    assert.match(summary.records[0].message, /Attempts: 3 \(2 retries\)/);
+    assert.equal(readCsvRecords(options.logDir).length, 1);
+    assert.ok(fs.existsSync(path.join(options.uploadedDir, 'Manesar', 'a.pdf')));
+});
+
+test('three retries are exhausted before moving a preview failure to failed', async t => {
+    const options = fixture(t);
+    let attempts = 0;
+    const summary = await main({ ...options, retryDelayMs: 0, processInvoice: async (invoice, company, source, run) => {
+        attempts++;
+        run.stage = 'UPLOAD_PREVIEW';
+        throw new Error('Timed out waiting for upload');
+    } });
+    assert.equal(attempts, 4);
+    assert.match(summary.records[0].message, /Attempts: 4 \(3 retries\)/);
+    assert.equal(summary.records[0].manualCheckRequired, false);
+    assert.ok(fs.existsSync(path.join(options.failedDir, 'Manesar', 'a.pdf')));
+});
+
+test('temporary connection failures recover; exhausted network errors stop with PDFs still pending', async t => {
+    for (const recover of [true, false]) {
+        const options = fixture(t, { Manesar: ['a.pdf', 'b.pdf'] });
+        let attempts = 0;
+        const summary = await main({ ...options, limit: 1, retryDelayMs: 0, processInvoice: async (invoice, company, source, run) => {
+            attempts++;
+            run.stage = 'OPEN_UPLOAD_PAGE';
+            if (recover && attempts === 2) return saved();
+            throw new Error('page.goto: net::ERR_CONNECTION_RESET');
+        } });
+        assert.equal(attempts, recover ? 2 : 4);
+        assert.equal(summary.stopped, !recover);
+        assert.ok(fs.existsSync(path.join(options.pendingDir, 'Manesar', 'b.pdf')));
+        if (!recover) assert.ok(fs.existsSync(path.join(options.pendingDir, 'Manesar', 'a.pdf')));
+    }
+});
+
+test('business rejections, closed browsers and any final Save attempt are never retried', async t => {
+    const failures = [
+        ['CONFIRM_PREVIEW', 'MSIL: Seller GSTIN not matched with Vendor GSTIN available in MSIL Vendor Master.', false],
+        ['CONFIRM_PREVIEW', 'MSIL: Invoice Document already exists against the selected MSIL Company.', false],
+        ['UPLOAD_PREVIEW', 'Target page, context or browser has been closed', false],
+        ['FINAL_SAVE', 'Timeout waiting for save response', false],
+        ['VERIFY_SAVE', 'Timed out waiting for success', true],
+        ['CONFIRM_PREVIEW', 'Timed out after save', true]
+    ];
+    for (const [stage, message, finalSaveClicked] of failures) {
+        const options = fixture(t);
+        let attempts = 0;
+        const summary = await main({ ...options, retryDelayMs: 0, processInvoice: async (invoice, company, source, run) => {
+            attempts++;
+            run.stage = stage;
+            const error = new Error(message);
+            error.finalSaveClicked = finalSaveClicked;
+            throw error;
+        } });
+        assert.equal(attempts, 1, message);
+        assert.equal(summary.records[0].status, 'FAILED');
+        if (finalSaveClicked) assert.equal(summary.records[0].manualCheckRequired, true);
+    }
+});

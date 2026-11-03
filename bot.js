@@ -191,7 +191,8 @@ async function confirmInvoice(page, timeout = 60000, run = {}) {
 async function main({
     dryRun = false, mappingFile = MAPPING_FILE, pendingDir = PENDING_DIR,
     uploadedDir = path.join(BASE_DIR, 'uploaded'), failedDir = path.join(BASE_DIR, 'failed'),
-    logDir = LOG_DIR, keepBrowserOpen = true, processInvoice, vendorCode, limit = Infinity
+    logDir = LOG_DIR, keepBrowserOpen = true, processInvoice, vendorCode, limit = Infinity,
+    maxRetries = 3, retryDelayMs = 5000
 } = {}) {
     if (vendorCode !== undefined) vendorCode = validateVendorCode(vendorCode);
     let context;
@@ -246,7 +247,7 @@ async function main({
 
     try {
         const summary = await processBatch({
-            pendingDir, uploadedDir, failedDir, mappingFile, logDir, dryRun, vendorCode, limit,
+            pendingDir, uploadedDir, failedDir, mappingFile, logDir, dryRun, vendorCode, limit, maxRetries, retryDelayMs,
             loadBillingMapping, resolveBillingCompany,
             processInvoice: processInvoice || uploadOnMsil, captureFailure,
             onResult: async record => {

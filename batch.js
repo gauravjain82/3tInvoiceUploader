@@ -4,6 +4,16 @@ const { randomUUID } = require('crypto');
 const { writeRunResult } = require('./run-log');
 const { validateVendorCode } = require('./vendor-input');
 
+function canRetryUpload(error, run) {
+    // A failed click/response can happen after MSIL commits the invoice.
+    if (run.finalSaveClicked || error.finalSaveClicked || ['FINAL_SAVE', 'VERIFY_SAVE'].includes(run.stage)) return false;
+    if (!['OPEN_UPLOAD_PAGE', 'UPLOAD_PREVIEW', 'CONFIRM_PREVIEW'].includes(run.stage)) return false;
+    const message = error.message || '';
+    if (/already exists|GSTIN|invalid IRN|MSIL rejected|MSIL:|Dropdown values do not match/i.test(message)) return false;
+    if (/browser.*closed|context.*closed|Target.*closed/i.test(message)) return false;
+    return error.name === 'TimeoutError' || /\btimeout\b|timed out|net::ERR_(?:CONNECTION|NETWORK|TIMED_OUT|EMPTY_RESPONSE|NAME_NOT_RESOLVED)|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|ERR_NETWORK/i.test(message);
+}
+
 function archiveInvoice(source, status, { uploadedDir, failedDir, runId = randomUUID(), relativePath = path.basename(source) }) {
     const archiveRoot = status === 'SUCCESS' ? uploadedDir : status === 'FAILED' ? failedDir : null;
     if (!archiveRoot) return null;
@@ -36,10 +46,12 @@ function archiveInvoice(source, status, { uploadedDir, failedDir, runId = random
 async function processBatch(options) {
     const { pendingDir, uploadedDir, failedDir, logDir, mappingFile, dryRun, vendorCode, limit = Infinity,
         loadBillingMapping, resolveBillingCompany, processInvoice,
-        onResult = async () => {}, captureFailure = async () => ({}) } = options;
+        onResult = async () => {}, captureFailure = async () => ({}), maxRetries = 3, retryDelayMs = 5000 } = options;
     const batchId = randomUUID();
     const records = [];
     if (limit !== Infinity && (!Number.isSafeInteger(limit) || limit < 1)) throw new Error('Invoice limit must be a positive integer.');
+    if (!Number.isSafeInteger(maxRetries) || maxRetries < 0) throw new Error('Retry count must be a non-negative integer.');
+    if (!Number.isSafeInteger(retryDelayMs) || retryDelayMs < 0) throw new Error('Retry delay must be a non-negative integer.');
     async function record(details) {
         const result = writeRunResult({ batchId, ...details }, logDir);
         records.push(result);
@@ -96,9 +108,24 @@ async function processBatch(options) {
             if (dryRun) {
                 outcome = { status: 'DRY_RUN', message: 'Folder billing mapping passed. PDF contents were not parsed; no browser opened or files moved.' };
             } else {
-                const result = await processInvoice(invoice, billing.billingCompany, source, run);
+                let result;
+                for (let attempt = 0; attempt <= maxRetries; attempt++) {
+                    run.attempt = attempt + 1;
+                    try {
+                        result = await processInvoice(invoice, billing.billingCompany, source, run);
+                        break;
+                    } catch (error) {
+                        run.finalSaveClicked = run.finalSaveClicked || error.finalSaveClicked === true;
+                        if (attempt === maxRetries || !canRetryUpload(error, run)) throw error;
+                        const delay = retryDelayMs * (attempt + 1);
+                        console.warn(`Retry ${attempt + 1}/${maxRetries} for ${fileName} in ${delay / 1000}s: ${error.message}`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        // The uploader reopens a clean form and verifies selections
+                        // on every attempt; no file is moved or logged as failed yet.
+                    }
+                }
                 if (result?.invoiceNumber) run.invoiceNumber = result.invoiceNumber;
-                run.finalSaveClicked = result?.finalSaveClicked === true;
+                run.finalSaveClicked = run.finalSaveClicked || result?.finalSaveClicked === true;
                 if (run.finalSaveClicked) {
                     run.stage = 'VERIFY_SAVE';
                     if (!/^\s*Data saved successfully\.\s*$/im.test(result.screenText || '')) {
@@ -120,6 +147,8 @@ async function processBatch(options) {
             outcome = { status: 'FAILED', message: error.message, error: error.stack,
                 manualCheckRequired: run.finalSaveClicked, ...evidence };
         }
+
+        if (run.attempt > 1) outcome.message += ` Attempts: ${run.attempt} (${run.attempt - 1} retries).`;
 
         // Never move files during a dry run or for shared infrastructure failures.
         if (!dryRun && !stopBatch && ['SUCCESS', 'FAILED'].includes(outcome.status)) {
@@ -147,4 +176,4 @@ async function processBatch(options) {
         records, counts, stopped, total: pendingTotal, selected: files.length, processed: records.length, remaining: pendingTotal - records.length };
 }
 
-module.exports = { processBatch, archiveInvoice };
+module.exports = { processBatch, archiveInvoice, canRetryUpload };

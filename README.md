@@ -21,6 +21,8 @@ Replace `YOUR_VENDOR_ID` with the vendor ID associated with the MSIL user, for e
 
 ## Run the bot
 
+Temporary upload/preview timeouts and connection errors before final Save receive up to **3 retries after the initial attempt** (4 attempts total), with waits of 5, 10 and 15 seconds. Each retry opens a clean upload form and rechecks the vendor/company. The final report records one outcome per invoice and includes the attempt count when retries occurred. The PDF is moved only after the final outcome. GSTIN mismatches, duplicates, invalid data, login/vendor problems and a closed browser are not retried. Once final Save is attempted, the bot never retries that invoice automatically; verify an uncertain result in MSIL before retrying manually. Exhausted network failures stop the batch with affected and remaining PDFs in pending.
+
 Example `billing-company.csv`:
 
 ```csv
