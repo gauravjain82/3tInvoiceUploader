@@ -1,0 +1,34 @@
+# Dependencies and downloaded browser drivers
+node_modules/
+unload-receipts/drivers/
+
+# Invoice files, reports, logs and saved browser authentication
+/pending/
+/uploaded/
+/failed/
+/logs/
+/edge-profile/
+/unload-reports/
+*.pdf
+
+# Local vendor/plant configuration; commit the example templates instead
+/billing-company.csv
+/billing-company.gstin-backup.csv
+/unload-plants.csv
+/unload-requests.csv
+
+# Packages, credentials and machine-specific settings
+*.zip
+*.log
+*.tmp
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+/.vscode/
+/.codex/
+/.agents/
+/.aws/
+Thumbs.db
+Desktop.ini

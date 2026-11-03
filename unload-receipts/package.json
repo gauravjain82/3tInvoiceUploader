@@ -1,0 +1,13 @@
+{
+  "name": "unload-receipt-inspector",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node inspect.js"
+  },
+  "dependencies": {
+    "exceljs": "4.4.0",
+    "invoicebot": "file:..",
+    "selenium-webdriver": "4.29.0"
+  }
+}

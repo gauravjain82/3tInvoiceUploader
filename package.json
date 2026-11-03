@@ -1,0 +1,19 @@
+{
+  "name": "invoicebot",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test bot.test.js run-log.test.js batch.test.js vendor-input.test.js",
+    "start": "node bot.js",
+    "dry-run": "node bot.js --dry-run",
+    "report": "node run-log.js",
+    "clear-report": "node run-log.js --clear"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "playwright": "^1.64.1"
+  }
+}
