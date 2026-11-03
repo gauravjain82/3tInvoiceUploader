@@ -150,3 +150,45 @@ test('an unverified final Save is attempted once and marked for manual checking'
         assert.equal(run.stage, 'VERIFY_SAVE');
     } finally { await browser.close(); }
 });
+
+test('save verification waits through a temporarily missing document body without repeating Save', async () => {
+    const browser = await chromium.launch({ channel: 'msedge', headless: true });
+    try {
+        const page = await browser.newPage();
+        await page.setContent(`<p>Document No 1000000002</p><button id="btnSave" onclick="
+            window.saveCount=(window.saveCount||0)+1;
+            document.body.remove();
+            setTimeout(function(){var body=document.createElement('body');body.textContent='Data saved successfully.';document.documentElement.appendChild(body);},300);
+        ">Save</button>`);
+        const result = await confirmInvoice(page.mainFrame(), 5000, {});
+        assert.equal(result.finalSaveClicked, true);
+        assert.equal(result.invoiceNumber, '1000000002');
+        assert.match(result.screenText, /Data saved successfully\./);
+        assert.equal(await page.evaluate(() => window.saveCount), 1);
+    } finally { await browser.close(); }
+});
+
+test('a Save click error is reconciled as success when the current MSIL response confirms the save', async () => {
+    const browser = await chromium.launch({ channel: 'msedge', headless: true });
+    try {
+        const page = await browser.newPage();
+        await page.setContent(`<p id="result">Document No 1000000003</p><button id="btnSave" onclick="window.saveCount=(window.saveCount||0)+1;document.getElementById('result').textContent='Data saved successfully.'">Save</button>`);
+        const frame = page.mainFrame();
+        const originalLocator = frame.locator.bind(frame);
+        frame.locator = selector => {
+            const locator = originalLocator(selector);
+            if (selector === '#btnSave') {
+                const click = locator.click.bind(locator);
+                locator.click = async options => { await click(options); throw new Error('Simulated click timeout after server saved'); };
+            }
+            return locator;
+        };
+        const run = {};
+        const result = await confirmInvoice(frame, 5000, run);
+        assert.equal(result.finalSaveClicked, true);
+        assert.equal(result.invoiceNumber, '1000000003');
+        assert.equal(run.stage, 'VERIFY_SAVE');
+        assert.match(result.screenText, /Data saved successfully\./);
+        assert.equal(await page.evaluate(() => window.saveCount), 1);
+    } finally { await browser.close(); }
+});

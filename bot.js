@@ -143,6 +143,7 @@ async function confirmInvoice(page, timeout = 60000, run = {}) {
         const result = await page.waitForFunction(selectors => {
             const errors = ['Invoice Document already exists against the selected MSIL Company.',
                 'Seller GSTIN not matched with Vendor GSTIN available in MSIL Vendor Master.'];
+            if (!document.body) return false; // ASP.NET can briefly remove the body during a postback.
             const message = errors.find(message => document.body.innerText.includes(message));
             if (message) return message;
             return selectors.some(selector => {
@@ -173,11 +174,28 @@ async function confirmInvoice(page, timeout = 60000, run = {}) {
         await confirm.click({ timeout });
         await Promise.all(dialogTasks);
         run.stage = 'VERIFY_SAVE';
-        await page.waitForFunction(() => /^\s*Data saved successfully\.\s*$/im.test(document.body.innerText), null, { timeout });
-        const screenText = await page.locator('body').innerText();
+        const success = await page.waitForFunction(() => {
+            const text = document.body?.innerText;
+            // Return the verified text in the same evaluation, avoiding another
+            // DOM read racing with a subsequent MSIL postback.
+            return text && /^\s*Data saved successfully\.\s*$/im.test(text) ? text : false;
+        }, null, { timeout });
+        let screenText;
+        try { screenText = await success.jsonValue(); }
+        finally { await success.dispose(); }
         console.log('MSIL verified: Data saved successfully.');
         return { finalSaveClicked: true, screenText, invoiceNumber: run.invoiceNumber || null };
     } catch (error) {
+        // A browser error (including a click timeout) does not mean the server
+        // rejected Save. Reconcile against the current page without resubmitting.
+        if (saveAttempted) {
+            const screenText = await page.locator('body').innerText({ timeout: 5000 }).catch(() => '');
+            if (/^\s*Data saved successfully\.\s*$/im.test(screenText)) {
+                run.stage = 'VERIFY_SAVE';
+                console.log('MSIL success verified after a browser error. Save was not repeated.');
+                return { finalSaveClicked: true, screenText, invoiceNumber: run.invoiceNumber || null };
+            }
+        }
         const failure = new Error(saveAttempted
             ? `Final Save was attempted but success could not be verified. Check MSIL before retrying this invoice. ${error.message}`
             : `Could not reach the final Save stage: ${error.message}`);
