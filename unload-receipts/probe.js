@@ -8,14 +8,34 @@ const { readRequests } = require('./config');
 const { cleanUrl } = require('./inspect');
 
 async function fillForm(driver, job) {
-    const vendor = await driver.findElement(By.id('ctl00_ContentPlaceHolderBody_drpVend'));
-    const options = await vendor.findElements(By.css('option'));
-    let found = false;
-    for (const option of options) {
-        if (await option.getAttribute('value') === job.vendor) { await option.click(); found = true; break; }
-    }
+    // IEDriver's getAttribute atom can fail in older IE document modes.
+    const found = await driver.executeScript(function (value) {
+        var select = document.getElementById('ctl00_ContentPlaceHolderBody_drpVend');
+        if (!select || select.disabled) return false;
+        for (var i = 0; i < select.options.length; i++) {
+            if (select.options[i].value === value && !select.options[i].disabled) {
+                select.selectedIndex = i;
+                if (select.onchange) select.onchange();
+                return true;
+            }
+        }
+        return false;
+    }, job.vendor);
     if (!found) throw new Error(`Vendor ${job.vendor} is unavailable for this login/plant.`);
-    await driver.findElement(By.css(`#drpSrvType option[value="${job.srvType === 'OE' ? 'O' : 'S'}"]`)).click();
+    const typeValue = job.srvType === 'OE' ? 'O' : 'S';
+    const typeFound = await driver.executeScript(function (value) {
+        var select = document.getElementById('drpSrvType');
+        if (!select || select.disabled) return false;
+        for (var i = 0; i < select.options.length; i++) {
+            if (select.options[i].value === value && !select.options[i].disabled) {
+                select.selectedIndex = i;
+                if (select.onchange) select.onchange();
+                return true;
+            }
+        }
+        return false;
+    }, typeValue);
+    if (!typeFound) throw new Error(`SRV type ${job.srvType} is unavailable.`);
     const srv = await driver.findElement(By.id('ctl00_ContentPlaceHolderBody_txtSRVno'));
     await srv.clear(); await srv.sendKeys('ALL');
     // The portal calendar sets this read-only text field through JavaScript.
