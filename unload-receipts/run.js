@@ -4,7 +4,7 @@ const { By } = require('selenium-webdriver');
 const { launchBrowser } = require('./browser');
 const { navigateToReceipt, isReceiptUrl } = require('./navigation');
 const { readRequests } = require('./config');
-const { fillForm, readResultDocument } = require('./probe');
+const { fillForm, readResultDocument, submitReport } = require('./probe');
 const { cleanUrl } = require('./inspect');
 const { META, parseReport, writeCsv } = require('./export');
 const { addResult, writeWorkbook } = require('./workbook');
@@ -104,7 +104,7 @@ async function main() {
                 metadata.PlantName = plant.displayName;
                 console.log(`[${index + 1}/${jobs.length}] ${job.code} ${job.date} ${job.vendor} ${job.srvType}`);
                 await fillForm(driver, job);
-                await driver.findElement(By.id('ctl00_ContentPlaceHolderBody_btnSubmit')).click();
+                await submitReport(driver);
                 data = await waitForResult(driver, home, job, plant);
                 const parsed = parseReport(data);
                 await saveArtifacts(driver, details, data);

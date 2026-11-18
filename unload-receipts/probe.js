@@ -45,12 +45,13 @@ async function fillForm(driver, job) {
 }
 
 function readResultDocument() {
-    function list(nodes) { return Array.prototype.slice.call(nodes); }
-    if (list(document.querySelectorAll('input[type="password"]')).some(function (el) { return el.getClientRects().length; })) return null;
+    function list(nodes) { var result = []; for (var i = 0; i < nodes.length; i++) result.push(nodes[i]); return result; }
+    var inputs = list(document.getElementsByTagName('input'));
+    if (inputs.some(function (el) { return el.type === 'password' && el.getClientRects().length; })) return null;
     return { title: document.title, url: location.href, ready: document.readyState,
         text: document.body ? document.body.innerText : '', mode: document.documentMode,
         reportText: document.getElementById('tbl') ? document.getElementById('tbl').innerText : '',
-        tables: list(document.querySelectorAll('table')).map(function (table, index) {
+        tables: list(document.getElementsByTagName('table')).map(function (table, index) {
             var parent = table;
             var inReport = false;
             while (parent) { if (parent.id === 'tbl') inReport = true; parent = parent.parentElement; }
@@ -59,8 +60,12 @@ function readResultDocument() {
                 rows: list(table.rows).map(function (row) { return list(row.cells).map(function (cell) {
                     return { text: cell.innerText, tag: cell.tagName, colspan: cell.colSpan, rowspan: cell.rowSpan };
                 }); }) };
-        }), links: list(document.querySelectorAll('a')).map(function (el) { return { id: el.id, text: el.innerText, href: el.getAttribute('href') }; }),
-        inputs: list(document.querySelectorAll('input:not([type="hidden"]):not([type="password"]),select')).map(function (el) { return { id: el.id, type: el.type, value: el.value }; }) };
+        }), links: list(document.getElementsByTagName('a')).map(function (el) { return { id: el.id, text: el.innerText, href: el.getAttribute('href') }; }),
+        inputs: inputs.filter(function (el) { return el.type !== 'hidden' && el.type !== 'password'; }).concat(list(document.getElementsByTagName('select'))).map(function (el) { return { id: el.id, type: el.type, value: el.value }; }) };
+}
+
+async function submitReport(driver) {
+    await driver.executeScript('var button = document.getElementById("ctl00_ContentPlaceHolderBody_btnSubmit"); if (!button || button.disabled) throw new Error("Report submit button is unavailable."); button.click();');
 }
 
 async function main() {
@@ -79,7 +84,7 @@ async function main() {
         fs.mkdirSync(output, { recursive: true });
         fs.writeFileSync(path.join(output, 'request.json'), JSON.stringify({ ...job, plant }, null, 2));
         console.log('Submitting ONE report query:', job.date, job.vendor, job.srvType, 'SRV=ALL');
-        await driver.findElement(By.id('ctl00_ContentPlaceHolderBody_btnSubmit')).click();
+        await submitReport(driver);
         await new Promise(resolve => setTimeout(resolve, 5000));
         let count = 0;
         async function capture(depth) {
@@ -112,5 +117,5 @@ async function main() {
         await new Promise(resolve => setTimeout(resolve, 15 * 60 * 1000));
     } finally { await driver.quit().catch(() => {}); }
 }
-module.exports = { fillForm, readResultDocument };
+module.exports = { fillForm, readResultDocument, submitReport };
 if (require.main === module) main().catch(error => { console.error('Probe error:', error.message); process.exitCode = 1; });
