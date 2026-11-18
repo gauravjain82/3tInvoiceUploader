@@ -43,12 +43,11 @@ async function navigateToReceipt(driver, home, plant, { fromCurrent = false } = 
     }
     async function clickLink(fragment) {
         const link = await driver.findElement(By.css(`a[href*="${fragment}"]`));
-        const href = await link.getAttribute('href');
+        const href = await driver.executeScript('return arguments[0].href;', link);
         if (new URL(href, home).origin !== home.origin) throw new Error('Unexpected external menu link; navigation stopped.');
         // Legacy hover menus can hide their anchors. Invoke the actual captured
         // anchor's click handler rather than constructing a protected page URL.
-        if (await link.isDisplayed()) await link.click();
-        else await driver.executeScript('arguments[0].click();', link);
+        await driver.executeScript('arguments[0].click();', link);
     }
     if (!fromCurrent) {
         console.log('Waiting for manual login and the logged-in Home page (up to 15 minutes).');
@@ -64,16 +63,17 @@ async function navigateToReceipt(driver, home, plant, { fromCurrent = false } = 
     const candidates = await driver.findElements(By.css(`input[type="submit"][id^="${plant.code}_"]`));
     if (candidates.length !== 1) throw new Error(`Plant ${plant.code} was not uniquely found in the portal plant list.`);
     const button = candidates[0];
-    if (!await button.isDisplayed() || !await button.isEnabled()) throw new Error('Configured plant is unavailable for this login.');
-    const plantId = await button.getAttribute('id');
-    const plantName = await button.getAttribute('value');
+    const details = await driver.executeScript('var el = arguments[0]; return { id: el.id, value: el.value, available: !el.disabled && !!el.getClientRects().length };', button);
+    if (!details.available) throw new Error('Configured plant is unavailable for this login.');
+    const plantId = details.id;
+    const plantName = details.value;
     const portalName = plantId.slice(plant.code.length + 1);
     if (plant.name && portalName !== plant.name) throw new Error('Plant code/name does not match the portal list.');
     plant = { ...plant, name: portalName, displayName: plantName };
     await button.click();
     await waitPage('/Delivery/Queries/Querymenu3.aspx');
     const receiptLink = await driver.findElement(By.css('a[href*="ParamUnloadNoGeneration.aspx"]'));
-    const receiptUrl = new URL(await receiptLink.getAttribute('href'), await driver.getCurrentUrl());
+    const receiptUrl = new URL(await driver.executeScript('return arguments[0].href;', receiptLink), await driver.getCurrentUrl());
     if (receiptUrl.origin !== home.origin || receiptUrl.searchParams.get('CompCode') !== plant.code
         || receiptUrl.searchParams.get('CompName') !== plant.name) throw new Error('Receipt link plant differs from CSV. Navigation stopped.');
     console.log('Opening Supply: Unload Number Wise Receipt Report.');

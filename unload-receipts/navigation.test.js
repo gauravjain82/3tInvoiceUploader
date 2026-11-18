@@ -44,9 +44,15 @@ function fixture(wrongPlant = false) {
             else if (value.includes('02_MSILM')) target = '/Delivery/Queries/Querymenu3.aspx';
             else if (value.includes('ParamUnloadNoGeneration')) target = '/Delivery/Queries/ParamUnloadNoGeneration.aspx?CompCode=' + (wrongPlant ? '01' : '02') + '&CompName=MSILM';
             else assert.match(value, /txtUnloadDate/);
-            return { getAttribute: async name => name === 'id' ? '02_MSILM' : name === 'value' ? 'MARUTI SUZUKI INDIA LTD - MANESAR VEHICLE' : origin + target, isDisplayed: async () => true, isEnabled: async () => true,
+            return { href: origin + target,
                 click: async () => { clicked.push(value); url = origin + target; } };
-        }
+        },
+        executeScript: async (script, element) => {
+            if (script.includes('getClientRects')) return { id: '02_MSILM', value: 'MARUTI SUZUKI INDIA LTD - MANESAR VEHICLE', available: true };
+            if (script.includes('.click()')) return element.click();
+            if (script.includes('.href')) return element.href;
+            throw new Error('Unexpected script');
+        },
     };
     return { driver, clicked };
 }
