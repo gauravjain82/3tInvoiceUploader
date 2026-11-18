@@ -56,7 +56,7 @@ From C:\InvoiceBot, run `inspect-unload-receipt.cmd` or `node unload-receipts/in
 
 Dependencies: `npm ci --prefix unload-receipts`. Selenium 4.29.0 supports this project's Node 22.16.0.
 
-Place the official Selenium IEDriverServer.exe in `unload-receipts/drivers/`, or set UNLOAD_IE_DRIVER to its full path. The official 32-bit IEDriver 4.14.0 works on 64-bit Windows too.
+Double-click `setup-ie-driver.cmd` in `C:\InvoiceBot` to download the official 32-bit IEDriver 4.14.0 into `unload-receipts/drivers/`. It requires internet access and leaves an existing driver untouched. The 32-bit driver works on 64-bit Windows too. Alternatively, place `IEDriverServer.exe` there manually or set UNLOAD_IE_DRIVER to its full path.
 
 Microsoft guide: https://learn.microsoft.com/en-us/microsoft-edge/webdriver/ie-mode
 
