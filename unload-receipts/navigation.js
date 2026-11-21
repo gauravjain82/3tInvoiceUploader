@@ -55,6 +55,23 @@ async function navigateToReceipt(driver, home, plant, { fromCurrent = false } = 
     } else {
         const current = new URL(await driver.getCurrentUrl());
         if (current.origin !== home.origin) throw new Error('Portal session is unavailable.');
+        if (current.pathname.toLowerCase() !== '/mainmenu.aspx') {
+            console.log('Returning to the portal Home menu before changing plants.');
+            const clicked = await driver.executeScript(function () {
+                var links = document.getElementsByTagName('a');
+                var found = [];
+                for (var i = 0; i < links.length; i++) {
+                    var label = (links[i].innerText || links[i].textContent || '').replace(/^\s+|\s+$/g, '');
+                    var action = links[i].getAttribute('onclick') || '';
+                    if (/^home$/i.test(label) && /\bJSLT\(\s*['"]MainMenu\.aspx['"]\s*\)/i.test(action)) found.push(links[i]);
+                }
+                if (found.length !== 1) return false;
+                found[0].click();
+                return true;
+            });
+            if (!clicked) throw new Error('Portal Home menu control was not uniquely found; cannot change plants.');
+            await waitPage('/MainMenu.aspx');
+        }
     }
     console.log('Home detected. Opening Delivery → Queries.');
     await clickLink('Delivery/Queries/comp_code3.aspx');

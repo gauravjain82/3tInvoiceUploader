@@ -27,9 +27,9 @@ test('receipt verification rejects wrong plant and foreign origin', () => {
     assert.equal(isReceiptUrl('https://example.com' + route, plant, origin), false);
 });
 
-function fixture(wrongPlant = false) {
+function fixture(wrongPlant = false, initialPath = '/MainMenu.aspx') {
     const origin = 'https://vendorextranet.maruti.co.in';
-    let url = origin + '/MainMenu.aspx';
+    let url = origin + initialPath;
     const clicked = [];
     const driver = {
         getAllWindowHandles: async () => ['main'],
@@ -48,6 +48,7 @@ function fixture(wrongPlant = false) {
                 click: async () => { clicked.push(value); url = origin + target; } };
         },
         executeScript: async (script, element) => {
+            if (typeof script === 'function') { clicked.push('Home'); url = origin + '/MainMenu.aspx'; return true; }
             if (script.includes('getClientRects')) return { id: '02_MSILM', value: 'MARUTI SUZUKI INDIA LTD - MANESAR VEHICLE', available: true };
             if (script.includes('.click()')) return element.click();
             if (script.includes('.href')) return element.href;
@@ -64,6 +65,13 @@ test('navigation performs only the three menu/plant clicks and stops before repo
     assert.match(clicked[1], /02_MSILM/);
     assert.match(clicked[2], /ParamUnloadNoGeneration/);
     assert.ok(clicked.every(value => !/btnSubmit|btnSave/.test(value)));
+});
+
+test('returns to Home before selecting a different plant from a report page', async () => {
+    const { driver, clicked } = fixture(false, '/Delivery/Queries/UnloadNoGeneration.aspx');
+    await navigateToReceipt(driver, new URL('https://vendorextranet.maruti.co.in/'), { code: '02', name: 'MSILM' }, { fromCurrent: true });
+    assert.equal(clicked[0], 'Home');
+    assert.match(clicked[1], /comp_code3/);
 });
 
 test('wrong plant in menu stops before clicking the receipt link', async () => {
