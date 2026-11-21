@@ -2,33 +2,36 @@ const fs = require('fs');
 const path = require('path');
 const ExcelJS = require('exceljs');
 
-function worksheetName(plantName, usedNames = new Set()) {
+function worksheetName(plantName, usedNames = new Set(), srvType = '') {
     // Excel sheet names are limited to 31 characters and disallow these symbols.
     let name = plantName.replace(/[\\/*?:\[\]\x00-\x1f]/g, ' ').replace(/\s+/g, ' ').trim().replace(/^'+|'+$/g, '');
     if (name.length > 31) name = name.replace(/^MARUTI SUZUKI INDIA (?:LIMITED|LTD\.?)\s*-?\s*/i, '');
     if (name.length > 31) name = name.replace(/\bPLANT\s*/i, '').replace(/\s+/g, ' ').trim();
-    name = name.slice(0, 31).replace(/'+$/g, '') || 'Plant';
+    const typeSuffix = srvType ? ` ${srvType}` : '';
+    name = (name.slice(0, 31 - typeSuffix.length).trim().replace(/'+$/g, '') || 'Plant') + typeSuffix;
     const base = name;
     let suffix = 2;
     while (usedNames.has(name.toLowerCase()) || name.toLowerCase() === 'history') {
         const tail = ` (${suffix++})`;
-        name = base.slice(0, 31 - tail.length).replace(/'+$/g, '') + tail;
+        const plantPart = typeSuffix ? base.slice(0, -typeSuffix.length) : base;
+        name = plantPart.slice(0, 31 - tail.length - typeSuffix.length).trim().replace(/'+$/g, '') + typeSuffix + tail;
     }
     usedNames.add(name.toLowerCase());
     return name;
 }
 
-function addResult(plants, plant, result) {
-    const key = plant.code;
+function addResult(plants, plant, result, srvType) {
+    if (!['OE', 'Spares'].includes(srvType)) throw new Error('A valid SRV type is required for the worksheet.');
+    const key = JSON.stringify([plant.code, srvType]);
     let sheet = plants.get(key);
     if (!sheet) {
-        sheet = { plantName: plant.displayName, columns: [], values: [] };
+        sheet = { plantName: plant.displayName, srvType, columns: [], values: [] };
         plants.set(key, sheet);
     }
     if (result.status !== 'SUCCESS') return;
     if (!result.columns?.length || !Array.isArray(result.values)) throw new Error('Report columns or values are missing.');
     if (sheet.columns.length && JSON.stringify(sheet.columns) !== JSON.stringify(result.columns)) {
-        throw new Error('Report columns changed for this plant. Stopped to preserve the exact portal layout.');
+        throw new Error('Report columns changed for this plant and SRV type. Stopped to preserve the exact portal layout.');
     }
     if (result.values.some(row => row.length !== result.columns.length)) throw new Error('Report row width differs from its header.');
     if (sheet.values.length + result.values.length > 1048575) throw new Error('This plant exceeds the Excel worksheet row limit.');
@@ -41,7 +44,7 @@ async function writeWorkbook(file, plants) {
     const workbook = new ExcelJS.Workbook();
     const usedNames = new Set();
     for (const plant of plants.values()) {
-        const sheet = workbook.addWorksheet(worksheetName(plant.plantName, usedNames));
+        const sheet = workbook.addWorksheet(worksheetName(plant.plantName, usedNames, plant.srvType));
         if (!plant.columns.length) continue; // No fake rows/columns for empty reports.
         sheet.addRow(plant.columns);
         // Values stay as strings: preserves leading zeroes and long identifiers,

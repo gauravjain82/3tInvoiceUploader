@@ -13,7 +13,7 @@ async function rebuild(directory) {
         if (!['SUCCESS', 'NO_DATA'].includes(row.Result)) continue;
         const parsed = row.Result === 'NO_DATA' ? { status: 'NO_DATA' }
             : parseReport(JSON.parse(fs.readFileSync(path.join(row.DetailsFolder, 'page.json'), 'utf8')));
-        addResult(plants, { code: row.CompCode, displayName: row.PlantName }, parsed);
+        addResult(plants, { code: row.CompCode, displayName: row.PlantName }, parsed, row.SRVType);
     }
     const file = path.join(directory, 'receipts.xlsx');
     await writeWorkbook(file, plants);

@@ -108,7 +108,7 @@ async function main() {
                 data = await waitForResult(driver, home, job, plant);
                 const parsed = parseReport(data);
                 await saveArtifacts(driver, details, data);
-                addResult(plants, plant, parsed);
+                addResult(plants, plant, parsed, job.srvType);
                 const common = { ...metadata, Result: parsed.status, Reason: parsed.reason };
                 statuses.push({ ...common, Records: parsed.records.length, DetailsFolder: details });
                 console.log(`  ${parsed.status}: ${parsed.records.length} records`);

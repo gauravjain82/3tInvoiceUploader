@@ -25,12 +25,12 @@ Double-click `download-unload-receipts.cmd`, then log in manually when required.
 
 Each run creates `C:\InvoiceBot\unload-reports\<timestamp>\` with:
 
-- `receipts.xlsx`: one worksheet per plant, containing only MSIL's original report headers and rows in their original order. Results from all dates, vendors and SRV types for that plant append to its worksheet. No metadata, status columns or artificial no-data rows are added. Long plant names are shortened to Excel's 31-character limit; for example, MANESAR POWERTRAIN - ENGINE. Full plant names remain in the separate query log. All identifiers are stored as text to preserve leading zeroes and long numbers.
+- `receipts.xlsx`: one worksheet per plant and SRV type, such as `GURGAON OE` and `GURGAON Spares`. Results from all dates and vendors for that plant and type append to its worksheet, containing only MSIL's original report headers and rows in their original order. No metadata, status columns or artificial no-data rows are added. Long plant names are shortened to fit Excel's 31-character limit while preserving the type. Full plant names remain in the separate query log. All identifiers are stored as text to preserve leading zeroes and long numbers.
 - `query-status.csv`: one row per attempted date/type, including record count, outcome and details folder.
 - `requests.json`: the complete expanded query plan for the run; requests without a status row were not attempted if the batch stopped.
 - A folder per query containing page text, captured tables/links and a screenshot.
 
-SUCCESS means table rows were exported. NO_DATA means the portal explicitly returned No Data Found; it is recorded only in the separate query-status.csv, without adding a row to the workbook. A plant with no data has an empty worksheet. FAILED includes the reason in the separate query log. Unknown layouts, merged rows, pagination or changed columns within a plant stop the run rather than exporting incomplete data. Such cases need inspection before enabling support. The workbook and query log are updated after each query. Every run uses a new folder and does not overwrite previous runs. Protect these local reports because they can contain business data.
+SUCCESS means table rows were exported. NO_DATA means the portal explicitly returned No Data Found; it is recorded only in the separate query-status.csv, without adding a row to the workbook. A plant and type with no data has an empty worksheet. FAILED includes the reason in the separate query log. Unknown layouts, merged rows, pagination or changed columns within a plant and type stop the run rather than exporting incomplete data. Such cases need inspection before enabling support. The workbook and query log are updated after each query. Every run uses a new folder and does not overwrite previous runs. Protect these local reports because they can contain business data.
 
 Useful terminal commands from C:\InvoiceBot:
 
