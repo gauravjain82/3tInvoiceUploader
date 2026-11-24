@@ -82,7 +82,8 @@ async function main() {
         const plant = await navigateToReceipt(driver, home, { code: job.code });
         await fillForm(driver, job);
         fs.mkdirSync(output, { recursive: true });
-        fs.writeFileSync(path.join(output, 'request.json'), JSON.stringify({ ...job, plant }, null, 2));
+        const { homeUrl, ...loggedPlant } = plant;
+        fs.writeFileSync(path.join(output, 'request.json'), JSON.stringify({ ...job, plant: loggedPlant }, null, 2));
         console.log('Submitting ONE report query:', job.date, job.vendor, job.srvType, 'SRV=ALL');
         await submitReport(driver);
         await new Promise(resolve => setTimeout(resolve, 5000));

@@ -99,7 +99,7 @@ async function main() {
             const details = path.join(directory, `${String(index + 1).padStart(3, '0')}-${job.code}-${job.date}-${job.vendor}-${job.srvType}`);
             try {
                 if (!plant || plant.code !== job.code) {
-                    plant = await navigateToReceipt(driver, home, { code: job.code }, { fromCurrent: !!plant });
+                    plant = await navigateToReceipt(driver, home, { code: job.code, homeUrl: plant?.homeUrl }, { fromCurrent: !!plant });
                 } else await returnToForm(driver, home, plant);
                 metadata.PlantName = plant.displayName;
                 console.log(`[${index + 1}/${jobs.length}] ${job.code} ${job.date} ${job.vendor} ${job.srvType}`);

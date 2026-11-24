@@ -26,6 +26,7 @@ function isReceiptUrl(value, plant, origin) {
 }
 
 async function navigateToReceipt(driver, home, plant, { fromCurrent = false } = {}) {
+    let homeUrl = plant.homeUrl;
     async function waitPage(pathname, timeout = 60000) {
         return driver.wait(async () => {
             for (const handle of await driver.getAllWindowHandles()) {
@@ -51,7 +52,7 @@ async function navigateToReceipt(driver, home, plant, { fromCurrent = false } = 
     }
     if (!fromCurrent) {
         console.log('Waiting for manual login and the logged-in Home page (up to 15 minutes).');
-        await waitPage('/MainMenu.aspx', 15 * 60 * 1000);
+        homeUrl = (await waitPage('/MainMenu.aspx', 15 * 60 * 1000)).href;
     } else {
         const current = new URL(await driver.getCurrentUrl());
         if (current.origin !== home.origin) throw new Error('Portal session is unavailable.');
@@ -69,8 +70,27 @@ async function navigateToReceipt(driver, home, plant, { fromCurrent = false } = 
                 found[0].click();
                 return true;
             });
-            if (!clicked) throw new Error('Portal Home menu control was not uniquely found; cannot change plants.');
-            await waitPage('/MainMenu.aspx');
+            let reachedHome = false;
+            if (clicked) {
+                try {
+                    homeUrl = (await waitPage('/MainMenu.aspx', 15000)).href;
+                    reachedHome = true;
+                } catch (error) {
+                    if (error.name !== 'TimeoutError') throw error;
+                }
+            }
+            if (!reachedHome) {
+                if (!homeUrl) throw new Error('Portal Home was not reached and no logged-in Home URL was saved.');
+                const savedHome = new URL(homeUrl);
+                if (savedHome.origin !== home.origin || savedHome.pathname.toLowerCase() !== '/mainmenu.aspx') {
+                    throw new Error('Saved portal Home URL is invalid.');
+                }
+                console.log('Home menu did not open; returning to the Home page captured after login.');
+                await driver.get(savedHome.href);
+                homeUrl = (await waitPage('/MainMenu.aspx')).href;
+            }
+        } else {
+            homeUrl = current.href;
         }
     }
     console.log('Home detected. Opening Delivery → Queries.');
@@ -86,7 +106,7 @@ async function navigateToReceipt(driver, home, plant, { fromCurrent = false } = 
     const plantName = details.value;
     const portalName = plantId.slice(plant.code.length + 1);
     if (plant.name && portalName !== plant.name) throw new Error('Plant code/name does not match the portal list.');
-    plant = { ...plant, name: portalName, displayName: plantName };
+    plant = { ...plant, name: portalName, displayName: plantName, homeUrl };
     await button.click();
     await waitPage('/Delivery/Queries/Querymenu3.aspx');
     const receiptLink = await driver.findElement(By.css('a[href*="ParamUnloadNoGeneration.aspx"]'));

@@ -27,7 +27,7 @@ test('receipt verification rejects wrong plant and foreign origin', () => {
     assert.equal(isReceiptUrl('https://example.com' + route, plant, origin), false);
 });
 
-function fixture(wrongPlant = false, initialPath = '/MainMenu.aspx') {
+function fixture(wrongPlant = false, initialPath = '/MainMenu.aspx', homeClickWorks = true) {
     const origin = 'https://vendorextranet.maruti.co.in';
     let url = origin + initialPath;
     const clicked = [];
@@ -35,7 +35,8 @@ function fixture(wrongPlant = false, initialPath = '/MainMenu.aspx') {
         getAllWindowHandles: async () => ['main'],
         switchTo: () => ({ window: async () => {}, defaultContent: async () => {} }),
         getCurrentUrl: async () => url,
-        wait: async fn => { const result = await fn(); assert.ok(result); return result; },
+        wait: async fn => { const result = await fn(); if (!result) { const error = new Error('Timed out'); error.name = 'TimeoutError'; throw error; } return result; },
+        get: async target => { clicked.push('saved Home'); url = target; },
         findElements: async () => [await driver.findElement({ value: '02_MSILM' })],
         findElement: async locator => {
             const value = locator.value;
@@ -48,7 +49,7 @@ function fixture(wrongPlant = false, initialPath = '/MainMenu.aspx') {
                 click: async () => { clicked.push(value); url = origin + target; } };
         },
         executeScript: async (script, element) => {
-            if (typeof script === 'function') { clicked.push('Home'); url = origin + '/MainMenu.aspx'; return true; }
+            if (typeof script === 'function') { clicked.push('Home'); if (homeClickWorks) url = origin + '/MainMenu.aspx'; return true; }
             if (script.includes('getClientRects')) return { id: '02_MSILM', value: 'MARUTI SUZUKI INDIA LTD - MANESAR VEHICLE', available: true };
             if (script.includes('.click()')) return element.click();
             if (script.includes('.href')) return element.href;
@@ -72,6 +73,20 @@ test('returns to Home before selecting a different plant from a report page', as
     await navigateToReceipt(driver, new URL('https://vendorextranet.maruti.co.in/'), { code: '02', name: 'MSILM' }, { fromCurrent: true });
     assert.equal(clicked[0], 'Home');
     assert.match(clicked[1], /comp_code3/);
+});
+
+test('uses the previously observed logged-in Home URL if the Home control does not navigate', async () => {
+    const { driver, clicked } = fixture(false, '/Delivery/Queries/UnloadNoGeneration.aspx', false);
+    const homeUrl = 'https://vendorextranet.maruti.co.in/MainMenu.aspx?session=example';
+    const result = await navigateToReceipt(driver, new URL('https://vendorextranet.maruti.co.in/'), { code: '02', name: 'MSILM', homeUrl }, { fromCurrent: true });
+    assert.deepEqual(clicked.slice(0, 2), ['Home', 'saved Home']);
+    assert.equal(result.homeUrl, homeUrl);
+});
+
+test('rejects an external saved Home URL', async () => {
+    const { driver, clicked } = fixture(false, '/Delivery/Queries/UnloadNoGeneration.aspx', false);
+    await assert.rejects(navigateToReceipt(driver, new URL('https://vendorextranet.maruti.co.in/'), { code: '02', homeUrl: 'https://example.com/MainMenu.aspx' }, { fromCurrent: true }), /invalid/);
+    assert.deepEqual(clicked, ['Home']);
 });
 
 test('wrong plant in menu stops before clicking the receipt link', async () => {
