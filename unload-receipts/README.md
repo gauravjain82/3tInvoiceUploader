@@ -42,7 +42,17 @@ node unload-receipts/run.js --csv "C:\InvoiceBot\another-requests.csv"
 node --test unload-receipts/navigation.test.js unload-receipts/report.test.js unload-receipts/workbook.test.js
 ```
 
-`--plan` validates the input CSV and displays the expanded schedule without opening Edge. `--first` runs one date/type query. Ctrl+C stops the bot; completed workbook rows remain saved. A new run re-queries its configured dates; it does not automatically resume an earlier folder.
+`--plan` validates the input CSV and displays the expanded schedule without opening Edge. `--first` runs one date/type query. Ctrl+C stops the bot; completed workbook rows remain saved.
+
+Temporary navigation, report timeouts and connection errors are retried up to two times after the initial attempt. Each retry returns through Home and reopens the selected plant. Invalid layouts, mismatched results, session problems and other errors stop the batch for review.
+
+To continue a stopped run, close its workbook and run this command with the actual saved run folder (the launcher accepts the same arguments):
+
+```bat
+download-unload-receipts.cmd --resume "C:\InvoiceBot\unload-reports\2026-11-26T10-26-56-928Z"
+```
+
+Log in again when prompted. The bot reads the saved `requests.json` and `query-status.csv`, reconstructs the workbook from saved report details, skips successful and no-data queries, and retries the failed and remaining queries. It updates the same run folder. Keep the saved query folders and `page.json` files; resume stops if a successful report cannot be reconstructed. Do not run two bots on the same folder. A normal run without `--resume` starts a new folder and re-queries all configured dates.
 
 To convert a previously saved run to Excel without querying MSIL again:
 
