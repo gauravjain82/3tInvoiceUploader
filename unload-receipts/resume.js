@@ -7,6 +7,15 @@ const { parseDate } = require('./config');
 
 function jobKey(job) { return JSON.stringify([job.code, job.date, job.vendor, job.srvType]); }
 
+function findLatestRun(root) {
+    if (!fs.existsSync(root)) throw new Error('No saved unload receipt runs were found.');
+    const names = fs.readdirSync(root, { withFileTypes: true })
+        .filter(entry => entry.isDirectory() && /^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z$/.test(entry.name))
+        .map(entry => entry.name).sort().reverse();
+    if (!names.length) throw new Error('No saved unload receipt runs were found.');
+    return path.join(root, names[0]);
+}
+
 function loadResume(directory) {
     const jobs = JSON.parse(fs.readFileSync(path.join(directory, 'requests.json'), 'utf8'));
     if (!Array.isArray(jobs) || !jobs.length) throw new Error('Saved request plan is empty or invalid.');
@@ -40,4 +49,4 @@ function loadResume(directory) {
     }
     return { jobs, plants, statuses, completed };
 }
-module.exports = { jobKey, loadResume };
+module.exports = { jobKey, loadResume, findLatestRun };

@@ -7,9 +7,10 @@ const { navigateToReceipt } = require('./navigation');
 const { readRequests } = require('./config');
 const { cleanUrl } = require('./inspect');
 
-async function fillForm(driver, job) {
+async function selectVendor(driver, vendor) {
     // IEDriver's getAttribute atom can fail in older IE document modes.
-    const found = await driver.executeScript(function (value) {
+    // The form can reach its URL before its vendor dropdown is populated.
+    await driver.wait(() => driver.executeScript(function (value) {
         var select = document.getElementById('ctl00_ContentPlaceHolderBody_drpVend');
         if (!select || select.disabled) return false;
         for (var i = 0; i < select.options.length; i++) {
@@ -20,8 +21,11 @@ async function fillForm(driver, job) {
             }
         }
         return false;
-    }, job.vendor);
-    if (!found) throw new Error(`Vendor ${job.vendor} is unavailable for this login/plant.`);
+    }, vendor), 20000, `Vendor ${vendor} did not become available on the receipt form; check the login and plant.`, 1000);
+}
+
+async function fillForm(driver, job) {
+    await selectVendor(driver, job.vendor);
     const typeValue = job.srvType === 'OE' ? 'O' : 'S';
     const typeFound = await driver.executeScript(function (value) {
         var select = document.getElementById('drpSrvType');
@@ -118,5 +122,5 @@ async function main() {
         await new Promise(resolve => setTimeout(resolve, 15 * 60 * 1000));
     } finally { await driver.quit().catch(() => {}); }
 }
-module.exports = { fillForm, readResultDocument, submitReport };
+module.exports = { fillForm, readResultDocument, submitReport, selectVendor };
 if (require.main === module) main().catch(error => { console.error('Probe error:', error.message); process.exitCode = 1; });

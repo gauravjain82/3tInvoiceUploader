@@ -4,7 +4,17 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { writeCsv, META } = require('./export');
-const { loadResume, jobKey } = require('./resume');
+const { loadResume, jobKey, findLatestRun } = require('./resume');
+
+test('selects the latest timestamped run, including incomplete folders', t => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'receipt-latest-'));
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    assert.throws(() => findLatestRun(root), /No saved/);
+    for (const name of ['2026-11-26T10-26-56-928Z', '2026-11-27T12-28-26-792Z', 'other']) fs.mkdirSync(path.join(root, name));
+    const latest = findLatestRun(root);
+    assert.equal(path.basename(latest), '2026-11-27T12-28-26-792Z');
+    assert.throws(() => loadResume(latest), /ENOENT/);
+});
 
 test('resume reconstructs successful sheets and leaves failed queries to retry', t => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'receipt-resume-'));

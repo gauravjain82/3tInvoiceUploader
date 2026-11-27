@@ -8,7 +8,7 @@ const { fillForm, readResultDocument, submitReport } = require('./probe');
 const { cleanUrl } = require('./inspect');
 const { META, parseReport, writeCsv } = require('./export');
 const { addResult, writeWorkbook } = require('./workbook');
-const { jobKey, loadResume } = require('./resume');
+const { jobKey, loadResume, findLatestRun } = require('./resume');
 
 function isRetryable(error) {
     return error.name === 'TimeoutError' || /ECONNRESET|ECONNREFUSED|ETIMEDOUT|ERR_CONNECTION|network error/i.test(error.message || '');
@@ -94,10 +94,14 @@ async function main() {
     const csvIndex = args.indexOf('--csv');
     if (csvIndex !== -1 && !args[csvIndex + 1]) throw new Error('Supply a file after --csv.');
     const resumeIndex = args.indexOf('--resume');
+    const resumeLatest = args.includes('--resume-latest');
+    if (resumeLatest && resumeIndex !== -1) throw new Error('Use either --resume or --resume-latest.');
     if (resumeIndex !== -1 && (!args[resumeIndex + 1] || args[resumeIndex + 1].startsWith('--'))) throw new Error('Supply the saved run folder after --resume.');
-    if (resumeIndex !== -1 && (csvIndex !== -1 || args.includes('--first') || args.includes('--plan') || args.includes('--until-data'))) throw new Error('--resume cannot be combined with --csv, --first, --plan or --until-data.');
-    const directory = resumeIndex === -1 ? path.join(__dirname, '..', 'unload-reports', new Date().toISOString().replace(/[:.]/g, '-')) : path.resolve(args[resumeIndex + 1]);
-    const resumed = resumeIndex === -1 ? null : loadResume(directory);
+    if ((resumeIndex !== -1 || resumeLatest) && (csvIndex !== -1 || args.includes('--first') || args.includes('--plan') || args.includes('--until-data'))) throw new Error('Resume cannot be combined with --csv, --first, --plan or --until-data.');
+    const reportsRoot = path.join(__dirname, '..', 'unload-reports');
+    const directory = resumeLatest ? findLatestRun(reportsRoot) : resumeIndex === -1 ? path.join(reportsRoot, new Date().toISOString().replace(/[:.]/g, '-')) : path.resolve(args[resumeIndex + 1]);
+    if (resumeLatest) console.log('Latest run:', directory);
+    const resumed = resumeIndex === -1 && !resumeLatest ? null : loadResume(directory);
     let jobs = resumed ? resumed.jobs : readRequests(csvIndex === -1 ? undefined : path.resolve(args[csvIndex + 1]));
     if (args.includes('--first')) jobs = jobs.slice(0, 1);
     console.log(`Report queries: ${jobs.length}. SRV number is always ALL. Both runs OE and Spares separately.`);

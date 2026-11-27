@@ -1,6 +1,28 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { readResultDocument, submitReport } = require('./probe');
+const { readResultDocument, submitReport, selectVendor } = require('./probe');
+
+test('waits for a vendor option to load before selecting it', async () => {
+    const oldDocument = global.document;
+    const select = { disabled: false, options: [], selectedIndex: -1, onchange: () => { select.changed = true; } };
+    global.document = { getElementById: () => select };
+    let polls = 0;
+    const driver = {
+        executeScript: async (fn, value) => fn(value),
+        wait: async fn => {
+            assert.equal(await fn(), false);
+            polls++;
+            select.options.push({ value: 'O099', disabled: false });
+            assert.equal(await fn(), true);
+        }
+    };
+    try {
+        await selectVendor(driver, 'O099');
+        assert.equal(polls, 1);
+        assert.equal(select.selectedIndex, 0);
+        assert.equal(select.changed, true);
+    } finally { global.document = oldDocument; }
+});
 
 test('reads a legacy report document without selector APIs', () => {
     const oldDocument = global.document;

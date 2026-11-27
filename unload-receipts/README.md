@@ -46,7 +46,9 @@ node --test unload-receipts/navigation.test.js unload-receipts/report.test.js un
 
 Temporary navigation, report timeouts and connection errors are retried up to two times after the initial attempt. Each retry returns through Home and reopens the selected plant. Invalid layouts, mismatched results, session problems and other errors stop the batch for review.
 
-To continue a stopped run, close its workbook and run this command with the actual saved run folder (the launcher accepts the same arguments):
+To continue the latest saved run, close its workbook and double-click `resume-last-unload-receipts.cmd`. It selects the newest timestamped run folder and shows its path; if that run is already complete it stops without opening Edge. If the latest folder is invalid, it reports an error rather than silently choosing an older run.
+
+To continue a specific stopped run instead, close its workbook and run this command with the actual saved run folder (the launcher accepts the same arguments):
 
 ```bat
 download-unload-receipts.cmd --resume "C:\InvoiceBot\unload-reports\2026-11-26T10-26-56-928Z"
